@@ -74,8 +74,15 @@ static int __init arb_block_init(void)
 	int ret;
 
 	find_kallsyms_base();
-	if (!arb_resolve("qcom_scm_update_rollback_version")) {
+	if (!klnum_val || !kallrecon_klp) {
 		pr_warn("[arb_block] kallsyms recovery failed\n");
+		return -ENODATA;
+	}
+	pr_info("[arb_block] kallsyms ok syms=%u\n", klnum_val);
+	pr_info("[arb_block] __arm_smccc_smc=0x%lx\n",
+		arb_resolve("__arm_smccc_smc"));
+	if (!arb_resolve("__arm_smccc_smc")) {
+		pr_warn("[arb_block] __arm_smccc_smc not found\n");
 		return -ENODATA;
 	}
 
@@ -86,34 +93,29 @@ static int __init arb_block_init(void)
 	ret = hk_inline_hook(&hk_sysfs, "update_arb_store",
 			     "arb_sysfs_wrapper");
 	if (ret)
-		pr_warn("[arb_block] hook update_arb_store failed %d\n", ret);
+		pr_warn("[arb_block] update_arb_store not hooked: %d\n", ret);
 	else
 		pr_info("[arb_block] hooked update_arb_store\n");
 
 	ret = hk_inline_hook(&hk_api, "qcom_scm_update_rollback_version",
 			     "arb_api_wrapper");
-	if (ret) {
-		pr_warn("[arb_block] hook qcom_scm_update_rollback_version failed %d\n", ret);
-		goto err_sysfs;
-	}
-	pr_info("[arb_block] hooked qcom_scm_update_rollback_version\n");
+	if (ret)
+		pr_warn("[arb_block] qcom_scm_update_rollback_version not hooked: %d\n", ret);
+	else
+		pr_info("[arb_block] hooked qcom_scm_update_rollback_version\n");
 
 	ret = hk_inline_hook(&hk_smc, "__arm_smccc_smc", "arb_smc_wrapper");
 	if (ret) {
 		pr_warn("[arb_block] hook __arm_smccc_smc failed %d\n", ret);
-		goto err_api;
+		hk_inline_unhook(&hk_api);
+		hk_inline_unhook(&hk_sysfs);
+		hk_exit();
+		return ret;
 	}
 	pr_info("[arb_block] hooked __arm_smccc_smc\n");
 
 	pr_info("[arb_block] loaded\n");
 	return 0;
-
-err_api:
-	hk_inline_unhook(&hk_api);
-err_sysfs:
-	hk_inline_unhook(&hk_sysfs);
-	hk_exit();
-	return ret;
 }
 
 static void __exit arb_block_exit(void)
