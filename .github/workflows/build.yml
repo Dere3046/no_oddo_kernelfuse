@@ -1,0 +1,46 @@
+name: build
+
+on:
+  push:
+    paths:
+      - 'kern/**'
+      - '.github/workflows/build.yml'
+  pull_request:
+    paths:
+      - 'kern/**'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - android12-5.10
+          - android13-5.10
+          - android13-5.15
+          - android14-5.15
+          - android14-6.1
+          - android15-6.6
+          - android16-6.12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch deps
+        run: |
+          chmod +x kern/scripts/fetch-deps.sh
+          cd kern
+          ./scripts/fetch-deps.sh
+
+      - name: Build ${{ matrix.target }}
+        run: |
+          cd kern
+          ./scripts/build-ddkk.sh ${{ matrix.target }}
+
+      - name: Upload ${{ matrix.target }} artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kern-${{ matrix.target }}
+          path: kern/out/${{ matrix.target }}/*.ko
